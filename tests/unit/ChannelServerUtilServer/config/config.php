@@ -6,26 +6,27 @@ use function Imi\env;
 
 return [
     // 项目根命名空间
-    'namespace'    => 'Imi\Workerman\Test\ChannelServerUtilServer',
+    'namespace'       => 'Imi\Workerman\Test\ChannelServerUtilServer',
 
     // 配置文件
-    'configs'    => [
+    'configs'         => [
         'beans'        => __DIR__ . '/beans.php',
     ],
 
     // 扫描目录
-    'beanScan'    => [
+    'beanScan'        => [
         'Imi\Workerman\Test\ChannelServerUtilServer\Listener',
         'Imi\Workerman\Test\ChannelServerUtilServer\Cron',
     ],
 
     // 组件命名空间
-    'components'    => [
+    'components'      => [
         'Workerman' => 'Imi\Workerman',
+        'Macro'     => 'Imi\Macro',
     ],
 
     // 日志配置
-    'logger' => [
+    'logger'          => [
         'channels' => [
             'imi' => [
                 'handlers' => [
@@ -62,7 +63,7 @@ return [
 
     // Workerman 服务器配置
     'workermanServer' => [
-        'channel' => [
+        'channel'   => [
             'namespace'   => '',
             'type'        => Imi\Workerman\Server\Type::CHANNEL,
             'host'        => env('SERVER_HOST', '127.0.0.1'),
@@ -70,7 +71,7 @@ return [
             'configs'     => [
             ],
         ],
-        'http' => [
+        'http'      => [
             'namespace' => 'Imi\Workerman\Test\ChannelServerUtilServer\ApiServer',
             'type'      => Imi\Workerman\Server\Type::HTTP,
             'host'      => env('SERVER_HOST', '127.0.0.1'),
@@ -88,7 +89,10 @@ return [
         ],
     ],
 
-    'workerman' => [
+    'workerman'       => [
+        'worker' => [
+            'stopTimeout' => 30,
+        ],
         // 多进程通讯组件配置
         'channel' => [
             'host' => env('SERVER_HOST', '127.0.0.1'),
@@ -97,13 +101,13 @@ return [
     ],
 
     // 数据库配置
-    'db'    => [
+    'db'              => [
         // 默认连接池名
         'defaultPool'    => 'maindb',
     ],
 
     // redis 配置
-    'redis' => [
+    'redis'           => [
         // 默认连接池名
         'defaultPool'   => 'redis',
         'connections'   => [
@@ -116,7 +120,7 @@ return [
     ],
 
     // 锁
-    'lock'  => [
+    'lock'            => [
         'default' => 'redisConnectionContextLock',
         'list'    => [
             'redisConnectionContextLock' => [
@@ -128,7 +132,7 @@ return [
         ],
     ],
 
-    'imi' => [
+    'imi'             => [
         'beans' => [
             'ServerUtil' => \Imi\Workerman\Server\Util\ChannelServerUtil::class,
         ],

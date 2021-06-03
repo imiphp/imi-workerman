@@ -15,10 +15,10 @@ function startServer(): void
     function checkHttpServerStatus(): bool
     {
         $serverStarted = false;
-        for ($i = 0; $i < 60; ++$i)
+        for ($i = 0; $i < 20; ++$i)
         {
             sleep(1);
-            $context = stream_context_create(['http' => ['timeout' => 1]]);
+            $context = stream_context_create(['http' => ['timeout' => 20]]);
             if ('imi' === @file_get_contents(env('HTTP_SERVER_HOST', 'http://127.0.0.1:13000/'), false, $context))
             {
                 $serverStarted = true;
@@ -33,10 +33,10 @@ function startServer(): void
     function checkChannelServerUtilServerStatus(): bool
     {
         $serverStarted = false;
-        for ($i = 0; $i < 60; ++$i)
+        for ($i = 0; $i < 20; ++$i)
         {
             sleep(1);
-            $context = stream_context_create(['http' => ['timeout' => 1]]);
+            $context = stream_context_create(['http' => ['timeout' => 20]]);
             if ('imi' === @file_get_contents(env('HTTP_SERVER_HOST', 'http://127.0.0.1:13006/'), false, $context))
             {
                 $serverStarted = true;
@@ -50,7 +50,7 @@ function startServer(): void
     if ('\\' === \DIRECTORY_SEPARATOR)
     {
         $servers = [
-            'AppServer'    => [
+            'AppServer'                  => [
                 'start'         => __DIR__ . '/unit/AppServer/bin/start.ps1',
                 'stop'          => __DIR__ . '/unit/AppServer/bin/stop.ps1',
                 'checkStatus'   => 'checkHttpServerStatus',
@@ -65,7 +65,7 @@ function startServer(): void
     else
     {
         $servers = [
-            'AppServer'    => [
+            'AppServer'                  => [
                 'start'         => __DIR__ . '/unit/AppServer/bin/start.sh',
                 'stop'          => __DIR__ . '/unit/AppServer/bin/stop.sh',
                 'checkStatus'   => 'checkHttpServerStatus',
@@ -92,7 +92,7 @@ function startServer(): void
         echo "Starting {$name}...", \PHP_EOL;
         shell_exec("{$cmd}");
 
-        register_shutdown_function(function () use ($name, $options) {
+        register_shutdown_function(static function () use ($name, $options) {
             // stop server
             $cmd = $options['stop'];
             if ('\\' === \DIRECTORY_SEPARATOR)
@@ -115,39 +115,8 @@ function startServer(): void
     }
 }
 
-/**
- * 检查端口是否可以被绑定.
- */
-function checkPort(string $host, int $port, ?int &$errno = null, ?string &$errstr = null): bool
-{
-    $socket = @stream_socket_client('tcp://' . $host . ':' . $port, $errno, $errstr, 3);
-    if (!$socket)
-    {
-        return false;
-    }
-    fclose($socket);
-
-    return true;
-}
-
 startServer();
 
-register_shutdown_function(function () {
-    echo 'check ports...', \PHP_EOL;
-    foreach ([13000, 13002, 13003, 13004, 13005, 13006, 13007] as $port)
-    {
-        echo "checking port {$port}...";
-        $count = 0;
-        while (checkPort('127.0.0.1', $port))
-        {
-            if ($count >= 10)
-            {
-                echo 'failed', \PHP_EOL;
-                continue 2;
-            }
-            ++$count;
-            sleep(1);
-        }
-        echo 'OK', \PHP_EOL;
-    }
+register_shutdown_function(static function () {
+    checkPorts([13000, 13002, 13003, 13004, 13005, 13006, 13007]);
 });

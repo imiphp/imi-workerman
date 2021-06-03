@@ -11,7 +11,9 @@ use Imi\Bean\Annotation\Parser;
  * 进程注解.
  *
  * @Annotation
+ *
  * @Target("CLASS")
+ *
  * @Parser("Imi\Workerman\Process\Parser\ProcessParser")
  *
  * @property string $name 进程名称

@@ -13,7 +13,7 @@ use Imi\Server\ServerManager;
 use Imi\Workerman\Server\Contract\IWorkermanServer;
 
 /**
- * @Listener(eventName="IMI.SERVERS.CREATE.AFTER")
+ * @Listener(eventName="IMI.SERVERS.CREATE.AFTER", one=true)
  */
 class OnServerCreateAfter implements IEventListener
 {
@@ -29,7 +29,8 @@ class OnServerCreateAfter implements IEventListener
             return;
         }
         // 热更新
-        if (Config::get('@app.beans.hotUpdate.status', true))
+        // @phpstan-ignore-next-line
+        if (Config::get('@app.beans.hotUpdate.status', true) && !IMI_IN_PHAR)
         {
             // @phpstan-ignore-next-line
             App::getBean('AutoRunProcessManager')->add('hotUpdate', 'hotUpdate');

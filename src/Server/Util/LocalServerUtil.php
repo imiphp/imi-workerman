@@ -90,6 +90,8 @@ class LocalServerUtil implements IWorkermanServerUtil
         {
             /** @var TcpConnection|null $connection */
             $connection = $worker->connections[$tmpClientId] ?? null;
+            // 尚未合入 4.1 分支：https://github.com/walkor/workerman/pull/839
+            // @phpstan-ignore-next-line
             if (null !== $connection && $connection->send($data, !isset($connection->websocketCurrentFrameLength) && !isset($connection->context->websocketCurrentFrameLength)))
             {
                 ++$success;
@@ -120,7 +122,7 @@ class LocalServerUtil implements IWorkermanServerUtil
             {
                 return 0;
             }
-            $clientIds = [$clientId];
+            $clientIds = (array) $clientId;
 
             return $this->sendRaw($data, $clientIds, $serverName, false);
         }

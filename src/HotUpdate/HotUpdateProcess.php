@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace Imi\Workerman\HotUpdate;
 
-use Imi\Aop\Annotation\Inject;
 use Imi\App;
 use Imi\Bean\Annotation\Bean;
 use Imi\Event\Event;
-use Imi\Log\ErrorLog;
 use Imi\Log\Log;
 use Imi\Util\Imi;
 use Imi\Workerman\Process\Annotation\Process;
@@ -17,10 +15,21 @@ use Workerman\Worker;
 
 /**
  * @Bean(name="hotUpdate", env="workerman")
+ *
  * @Process(name="hotUpdate")
  */
 class HotUpdateProcess extends BaseProcess
 {
+    public const DESCRIPTORSPEC = [
+        ['pipe', 'r'],  // 标准输入，子进程从此管道中读取数据
+        ['pipe', 'w'],  // 标准输出，子进程向此管道中写入数据
+    ];
+
+    public const CLEAR_CACHE_FUNCTIONS = [
+        'apcu_clear_cache',
+        'opcache_reset',
+    ];
+
     /**
      * 监视器类.
      */
@@ -54,7 +63,7 @@ class HotUpdateProcess extends BaseProcess
     /**
      * 热更新检测，更改的文件列表，储存在的文件名.
      */
-    protected string $changedFilesFile;
+    protected string $changedFilesFile = '';
 
     /**
      * buildRuntime resource.
@@ -69,14 +78,9 @@ class HotUpdateProcess extends BaseProcess
     private ?array $buildRuntimePipes = null;
 
     /**
-     * @Inject("ErrorLog")
-     */
-    protected ErrorLog $errorLog;
-
-    /**
      * 开始时间.
      */
-    private float $beginTime;
+    private float $beginTime = 0;
 
     /**
      * 是否正在构建中.
@@ -96,8 +100,9 @@ class HotUpdateProcess extends BaseProcess
             $this->defaultPath = Imi::getNamespacePaths(App::getNamespace());
         }
         $this->excludePaths[] = Imi::getRuntimePath();
+        $this->excludePaths[] = '*.macro.php';
         Log::info('Process [hotUpdate] start');
-        $monitor = App::getBean($this->monitorClass, array_merge($this->defaultPath, $this->includePaths), $this->excludePaths);
+        $monitor = App::newInstance($this->monitorClass, array_merge($this->defaultPath, $this->includePaths), $this->excludePaths);
         $time = 0;
         $this->initBuildRuntime();
         /** @phpstan-ignore-next-line */
@@ -144,11 +149,7 @@ class HotUpdateProcess extends BaseProcess
      */
     private function clearCache(): void
     {
-        static $functions = [
-            'apcu_clear_cache',
-            'opcache_reset',
-        ];
-        foreach ($functions as $function)
+        foreach (self::CLEAR_CACHE_FUNCTIONS as $function)
         {
             if (\function_exists($function))
             {
@@ -168,11 +169,7 @@ class HotUpdateProcess extends BaseProcess
             'confirm'           => true,
             'app-runtime'       => Imi::getCurrentModeRuntimePath('runtime'),
         ]);
-        static $descriptorspec = [
-            ['pipe', 'r'],  // 标准输入，子进程从此管道中读取数据
-            ['pipe', 'w'],  // 标准输出，子进程向此管道中写入数据
-        ];
-        $this->buildRuntimeHandler = proc_open(\Imi\cmd($cmd), $descriptorspec, $this->buildRuntimePipes);
+        $this->buildRuntimeHandler = proc_open(\Imi\cmd($cmd), self::DESCRIPTORSPEC, $this->buildRuntimePipes);
         if (false === $this->buildRuntimeHandler)
         {
             throw new \RuntimeException(sprintf('Open "%s" failed', $cmd));

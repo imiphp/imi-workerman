@@ -9,6 +9,7 @@ use Imi\App;
 use Imi\Config;
 use Imi\Event\Event;
 use Imi\Log\Handler\ConsoleHandler;
+use Imi\Log\Log;
 use Imi\Log\Logger;
 use Imi\RequestContext;
 use Imi\Util\Imi;
@@ -17,6 +18,7 @@ use Imi\Util\Process\ProcessType;
 use Imi\Worker as ImiWorker;
 use Imi\Workerman\Process\Contract\IProcess;
 use Imi\Workerman\Server\WorkermanServerWorker;
+use Imi\Workerman\Util\Imi as UtilImi;
 use Symfony\Component\Console\Output\StreamOutput;
 use Workerman\Worker;
 
@@ -25,6 +27,8 @@ use Workerman\Worker;
  */
 class ProcessManager
 {
+    use \Imi\Util\Traits\TStaticClass;
+
     private static array $map = [];
 
     /**
@@ -33,10 +37,6 @@ class ProcessManager
      * @var Worker[]
      */
     private static array $processes = [];
-
-    private function __construct()
-    {
-    }
 
     public static function getMap(): array
     {
@@ -93,6 +93,10 @@ class ProcessManager
             App::set(ProcessAppContexts::PROCESS_TYPE, ProcessType::PROCESS, true);
             App::set(ProcessAppContexts::PROCESS_NAME, $processName, true);
 
+            UtilImi::setProcessName('process', [
+                'processName'   => $processName,
+            ]);
+
             if (WorkermanServerWorker::$daemonize)
             {
                 /** @var Logger $loggerInstance */
@@ -108,6 +112,8 @@ class ProcessManager
                     }
                 }
             }
+
+            Log::info('Process start [' . $processName . ']. pid: ' . getmypid());
 
             RequestContext::muiltiSet([
                 'worker' => $worker,
@@ -143,13 +149,12 @@ class ProcessManager
             {
                 // 执行任务
                 /** @var IProcess $processInstance */
-                $processInstance = App::getBean($options['className'], $args);
+                $processInstance = App::newInstance($options['className'], $args);
                 $processInstance->run($worker);
             }
             catch (\Throwable $th)
             {
-                // @phpstan-ignore-next-line
-                App::getBean('ErrorLog')->onException($th);
+                Log::error($th);
             }
             finally
             {
@@ -158,6 +163,7 @@ class ProcessManager
                     'name'    => $processName,
                     'process' => $worker,
                 ]);
+                Log::info('Process stop [' . $processName . ']. pid: ' . getmypid());
             }
         };
 

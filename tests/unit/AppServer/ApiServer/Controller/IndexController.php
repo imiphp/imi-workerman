@@ -6,6 +6,8 @@ namespace Imi\Workerman\Test\AppServer\ApiServer\Controller;
 
 use Imi\RequestContext;
 use Imi\Server\Http\Controller\HttpController;
+use Imi\Server\Http\Message\Emitter\SseEmitter;
+use Imi\Server\Http\Message\Emitter\SseMessageEvent;
 use Imi\Server\Http\Message\Proxy\ResponseProxy;
 use Imi\Server\Http\Route\Annotation\Action;
 use Imi\Server\Http\Route\Annotation\Controller;
@@ -16,6 +18,7 @@ use Imi\Server\View\Annotation\View;
 use Imi\Util\Http\Consts\StatusCode;
 use Imi\Util\Http\MessageUtil;
 use Imi\Util\Stream\MemoryStream;
+use Imi\Workerman\Http\Message\WorkermanRequest;
 
 /**
  * @Controller(prefix="/")
@@ -24,6 +27,7 @@ class IndexController extends HttpController
 {
     /**
      * @Action
+     *
      * @Route("/")
      *
      * @return mixed
@@ -38,6 +42,7 @@ class IndexController extends HttpController
 
     /**
      * @Action
+     *
      * @Route("/route/{id}")
      */
     public function route(string $id): array
@@ -49,8 +54,11 @@ class IndexController extends HttpController
 
     /**
      * @Action
+     *
      * @Route(autoEndSlash=true)
+     *
      * @View(renderType="html")
+     *
      * @HtmlView(template="html")
      */
     public function html(int $time): array
@@ -62,7 +70,9 @@ class IndexController extends HttpController
 
     /**
      * @Action
+     *
      * @View(renderType="html")
+     *
      * @HtmlView(baseDir="index/")
      */
     public function html2(int $time): array
@@ -112,6 +122,7 @@ class IndexController extends HttpController
             'server'    => $request->getServerParams(),
             'request'   => $request->request(),
             'uri'       => (string) $request->getUri(),
+            'appUri'    => (string) $request->getAppUri(),
         ];
     }
 
@@ -179,7 +190,7 @@ class IndexController extends HttpController
                                             ->withCookie('e', '5', 0, '/', 'localhost')
                                             ->withCookie('f', '6', 0, '/', '', true)
                                             ->withCookie('g', '7', 0, '/', '', true, true)
-                                            ;
+        ;
     }
 
     /**
@@ -198,11 +209,13 @@ class IndexController extends HttpController
 
     /**
      * @Action
+     *
      * @Route("/middleware")
+     *
      * @Middleware(\Imi\Workerman\Test\AppServer\ApiServer\Middleware\Middleware1::class)
      * @Middleware({
-     *  \Imi\Workerman\Test\AppServer\ApiServer\Middleware\Middleware2::class,
-     *  \Imi\Workerman\Test\AppServer\ApiServer\Middleware\Middleware3::class
+     *     \Imi\Workerman\Test\AppServer\ApiServer\Middleware\Middleware2::class,
+     *     \Imi\Workerman\Test\AppServer\ApiServer\Middleware\Middleware3::class
      * })
      * @Middleware("@test")
      */
@@ -256,6 +269,7 @@ class IndexController extends HttpController
 
     /**
      * @Action
+     *
      * @Route("/a/{id:[0-9]{1,3}}/{page:\d+}")
      */
     public function regularExpression1(int $id, int $page): array
@@ -268,6 +282,7 @@ class IndexController extends HttpController
 
     /**
      * @Action
+     *
      * @Route("/a/{name:[a-zA-Z]+}/{page}")
      */
     public function regularExpression2(string $name, int $page): array
@@ -319,6 +334,7 @@ class IndexController extends HttpController
 
     /**
      * @Action
+     *
      * @Route(url="/type/{id}/{name}/{page}")
      */
     public function type(int $id, string $name, int $page): array
@@ -330,6 +346,7 @@ class IndexController extends HttpController
      * 测试重复路由警告.
      *
      * @Action
+     *
      * @Route("/duplicated")
      */
     public function duplicated1(): void
@@ -340,9 +357,46 @@ class IndexController extends HttpController
      * 测试重复路由警告.
      *
      * @Action
+     *
      * @Route("/duplicated")
      */
     public function duplicated2(): void
     {
+    }
+
+    /**
+     * @Action
+     */
+    public function connectionId(): array
+    {
+        /** @var WorkermanRequest $request */
+        $request = RequestContext::get('request');
+
+        return [
+            'id' => $request->getConnection()->id,
+        ];
+    }
+
+    /**
+     * SSE.
+     *
+     * @Action
+     */
+    public function sse(): void
+    {
+        $this->response->setResponseBodyEmitter(new class() extends SseEmitter {
+            protected function task(): void
+            {
+                $handler = $this->getHandler();
+                foreach (range(1, 100) as $i)
+                {
+                    if (!$handler->send((string) new SseMessageEvent((string) $i)))
+                    {
+                        throw new \RuntimeException('Send failed');
+                    }
+                    usleep(10000);
+                }
+            }
+        });
     }
 }

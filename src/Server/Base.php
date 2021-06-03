@@ -11,6 +11,7 @@ use Imi\Config;
 use Imi\ConnectionContext;
 use Imi\Event\Event;
 use Imi\Log\Handler\ConsoleHandler;
+use Imi\Log\Log;
 use Imi\Log\Logger;
 use Imi\RequestContext;
 use Imi\Server\Contract\BaseServer;
@@ -21,7 +22,6 @@ use Imi\Util\Imi;
 use Imi\Util\Socket\IPEndPoint;
 use Imi\Worker as ImiWorker;
 use Imi\Workerman\Server\Contract\IWorkermanServer;
-use InvalidArgumentException;
 use Symfony\Component\Console\Output\StreamOutput;
 use Workerman\Connection\ConnectionInterface;
 use Workerman\Connection\TcpConnection;
@@ -51,34 +51,39 @@ abstract class Base extends BaseServer implements IWorkermanServer, IServerGroup
         $this->bindEvents();
     }
 
+    /**
+     * {@inheritDoc}
+     */
+    public function parseConfig(array &$config): void
+    {
+        if (!isset($config['worker']))
+        {
+            $config['worker'] = $this->workerClass;
+        }
+        if (!isset($config['socketName']))
+        {
+            if (isset($config['host'], $config['port']))
+            {
+                $config['socketName'] = $this->getWorkerScheme() . '://' . $config['host'] . ':' . $config['port'];
+            }
+            else
+            {
+                $config['socketName'] = '';
+            }
+        }
+    }
+
     protected function createServer(): Worker
     {
         $config = $this->config;
-        if (isset($config['worker']))
-        {
-            $class = $this->workerClass = $config['worker'];
-        }
-        else
-        {
-            $class = $this->workerClass;
-        }
-        if (isset($config['socketName']))
-        {
-            $socketName = $config['socketName'];
-        }
-        elseif (isset($config['host'], $config['port']))
-        {
-            $socketName = $this->getWorkerScheme() . '://' . $config['host'] . ':' . $config['port'];
-        }
-        else
-        {
-            $socketName = '';
-        }
-        $worker = new $class($socketName, $config['context'] ?? []);
+        $this->parseConfig($config);
+
+        $class = $this->workerClass = $config['worker'];
+        $worker = new $class($config['socketName'], $config['context'] ?? []);
         $worker->name = $this->name;
         foreach ($config['configs'] ?? [] as $k => $v)
         {
-            $worker->$k = $v;
+            $worker->{$k} = $v;
         }
 
         return $worker;
@@ -144,10 +149,9 @@ abstract class Base extends BaseServer implements IWorkermanServer, IServerGroup
                 ], $this);
                 RequestContext::destroy();
             }
-            catch (\Throwable $ex)
+            catch (\Throwable $th)
             {
-                // @phpstan-ignore-next-line
-                App::getBean('ErrorLog')->onException($ex);
+                Log::error($th);
             }
         };
 
@@ -167,10 +171,9 @@ abstract class Base extends BaseServer implements IWorkermanServer, IServerGroup
                 ], $this);
                 RequestContext::destroy();
             }
-            catch (\Throwable $ex)
+            catch (\Throwable $th)
             {
-                // @phpstan-ignore-next-line
-                App::getBean('ErrorLog')->onException($ex);
+                Log::error($th);
             }
         };
 
@@ -190,10 +193,9 @@ abstract class Base extends BaseServer implements IWorkermanServer, IServerGroup
                 ], $this);
                 RequestContext::destroy();
             }
-            catch (\Throwable $ex)
+            catch (\Throwable $th)
             {
-                // @phpstan-ignore-next-line
-                App::getBean('ErrorLog')->onException($ex);
+                Log::error($th);
             }
         };
 
@@ -214,10 +216,9 @@ abstract class Base extends BaseServer implements IWorkermanServer, IServerGroup
                 ], $this);
                 RequestContext::destroy();
             }
-            catch (\Throwable $ex)
+            catch (\Throwable $th)
             {
-                // @phpstan-ignore-next-line
-                App::getBean('ErrorLog')->onException($ex);
+                Log::error($th);
             }
         };
 
@@ -239,10 +240,9 @@ abstract class Base extends BaseServer implements IWorkermanServer, IServerGroup
                 ], $this);
                 RequestContext::destroy();
             }
-            catch (\Throwable $ex)
+            catch (\Throwable $th)
             {
-                // @phpstan-ignore-next-line
-                App::getBean('ErrorLog')->onException($ex);
+                Log::error($th);
             }
         };
 
@@ -259,10 +259,9 @@ abstract class Base extends BaseServer implements IWorkermanServer, IServerGroup
                 ], $this);
                 RequestContext::destroy();
             }
-            catch (\Throwable $ex)
+            catch (\Throwable $th)
             {
-                // @phpstan-ignore-next-line
-                App::getBean('ErrorLog')->onException($ex);
+                Log::error($th);
             }
         };
 
@@ -304,6 +303,8 @@ abstract class Base extends BaseServer implements IWorkermanServer, IServerGroup
                             $server = ServerManager::createServer($name, $config);
                             $subWorker = $server->getWorker();
                             $subWorker->count = $worker->count;
+                            // @phpstan-ignore-next-line
+                            $subWorker->onWorkerStop = null;
                             $subWorker->listen();
                         }
                     }
@@ -365,10 +366,13 @@ abstract class Base extends BaseServer implements IWorkermanServer, IServerGroup
                 }
                 RequestContext::destroy();
             }
-            catch (\Throwable $ex)
+            catch (\Throwable $th)
             {
-                // @phpstan-ignore-next-line
-                App::getBean('ErrorLog')->onException($ex);
+                Log::error($th);
+            }
+            finally
+            {
+                Log::info('Worker start #' . $worker->id . '. pid: ' . getmypid());
             }
         };
 
@@ -389,10 +393,13 @@ abstract class Base extends BaseServer implements IWorkermanServer, IServerGroup
                 ], $this);
                 RequestContext::destroy();
             }
-            catch (\Throwable $ex)
+            catch (\Throwable $th)
             {
-                // @phpstan-ignore-next-line
-                App::getBean('ErrorLog')->onException($ex);
+                Log::error($th);
+            }
+            finally
+            {
+                Log::info('Worker stop #' . $worker->id . '. pid: ' . getmypid());
             }
         };
     }
@@ -406,7 +413,7 @@ abstract class Base extends BaseServer implements IWorkermanServer, IServerGroup
         $connection = $this->worker->connections[$clientId] ?? null;
         if (null === $connection)
         {
-            throw new InvalidArgumentException(sprintf('Client %s does not exists', $clientId));
+            throw new \InvalidArgumentException(sprintf('Client %s does not exists', $clientId));
         }
 
         return new IPEndPoint($connection->getRemoteIp(), $connection->getRemotePort());

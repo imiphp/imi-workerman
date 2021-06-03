@@ -6,6 +6,7 @@ namespace Imi\Workerman\Http\Message;
 
 use Imi\Server\Http\Message\Response;
 use Imi\Util\Http\Consts\MediaType;
+use Imi\Util\Http\Consts\ResponseHeader;
 use Imi\Util\Http\Consts\StatusCode;
 use Workerman\Connection\TcpConnection;
 use Workerman\Worker;
@@ -15,17 +16,22 @@ class WorkermanResponse extends Response
     /**
      * Workerman 的 http 响应对象
      */
-    protected ?\Workerman\Protocols\Http\Response $workermanResponse;
+    protected ?\Workerman\Protocols\Http\Response $workermanResponse = null;
+
+    /**
+     * Workerman 的 http 请求对象
+     */
+    protected ?WorkermanRequest $request = null;
 
     /**
      * Workerman 的 Worker 对象
      */
-    protected Worker $worker;
+    protected ?Worker $worker = null;
 
     /**
      * Workerman 连接对象
      */
-    protected TcpConnection $connection;
+    protected ?TcpConnection $connection = null;
 
     /**
      * 响应头是否可写.
@@ -37,11 +43,14 @@ class WorkermanResponse extends Response
      */
     protected bool $isBodyWritable = true;
 
-    public function __construct(Worker $worker, TcpConnection $connection, ?\Workerman\Protocols\Http\Response $response = null)
+    protected bool $emitterWritting = false;
+
+    public function __construct(Worker $worker, TcpConnection $connection, ?\Workerman\Protocols\Http\Response $response = null, ?WorkermanRequest $request = null)
     {
         $this->workermanResponse = $response;
         $this->worker = $worker;
         $this->connection = $connection;
+        $this->request = $request;
         parent::__construct();
     }
 
@@ -104,13 +113,38 @@ class WorkermanResponse extends Response
      */
     public function send(): self
     {
-        $this->sendHeaders();
-        if ($this->isBodyWritable())
+        if ($this->responseBodyEmitter)
         {
-            $this->isBodyWritable = false;
-            $response = $this->workermanResponse;
-            $response->withBody((string) $this->getBody());
-            $this->connection->send($response);
+            if ($this->emitterWritting)
+            {
+                return $this;
+            }
+            $this->emitterWritting = true;
+            $this->responseBodyEmitter->init($this, new WorkermanEmitHandler($this->connection));
+            $this->sendHeaders();
+            $this->connection->send($this->workermanResponse->withBody("\r\n"));
+            $this->responseBodyEmitter->send();
+            $this->connection->close();
+        }
+        else
+        {
+            $this->sendHeaders();
+            if ($this->isBodyWritable())
+            {
+                $this->isBodyWritable = false;
+                if ($this->shouldKeepAlive())
+                {
+                    $this->connection->send($this->workermanResponse->withBody((string) $this->getBody()));
+                }
+                else
+                {
+                    $this->connection->close($this->workermanResponse->withBody((string) $this->getBody()));
+                }
+            }
+            elseif (!$this->shouldKeepAlive())
+            {
+                $this->connection->close();
+            }
         }
 
         return $this;
@@ -146,9 +180,18 @@ class WorkermanResponse extends Response
         if ($this->isBodyWritable())
         {
             $this->isBodyWritable = false;
-            $response = $this->workermanResponse;
-            $response->withFile($filename, $offset, $length);
-            $this->connection->send($response);
+            if ($this->shouldKeepAlive())
+            {
+                $this->connection->send($this->workermanResponse->withFile($filename, $offset, $length));
+            }
+            else
+            {
+                $this->connection->close($this->workermanResponse->withFile($filename, $offset, $length));
+            }
+        }
+        elseif (!$this->shouldKeepAlive())
+        {
+            $this->connection->close();
         }
 
         return $this;
@@ -176,5 +219,26 @@ class WorkermanResponse extends Response
     public function getConnection(): TcpConnection
     {
         return $this->connection;
+    }
+
+    protected function shouldKeepAlive(): bool
+    {
+        if (0 === strcasecmp($this->getHeaderLine(ResponseHeader::CONNECTION), 'close'))
+        {
+            return false;
+        }
+        if ($request = $this->request)
+        {
+            if ($request->getProtocolVersion() >= 1.1)
+            {
+                return 0 !== strcasecmp($request->getHeaderLine('connection'), 'close');
+            }
+            else
+            {
+                return 0 === strcasecmp($request->getHeaderLine('connection'), 'keep-alive');
+            }
+        }
+
+        return true;
     }
 }
