@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit backupGlobals="false"
+         backupStaticAttributes="false"
+         bootstrap="./bootstrap.php"
+         colors="true"
+         convertErrorsToExceptions="true"
+         convertNoticesToExceptions="true"
+         convertWarningsToExceptions="true"
+         processIsolation="false"
+         stopOnFailure="false"
+         verbose="true">
+    <testsuites>
+        <testsuite name="HttpServer">
+            <directory>unit/AppServer/Tests/Http</directory>
+        </testsuite>
+        <testsuite name="WebSocketServer">
+            <directory>unit/AppServer/Tests/WebSocket</directory>
+        </testsuite>
+        <testsuite name="TcpServer">
+            <directory>unit/AppServer/Tests/Tcp</directory>
+        </testsuite>
+        <testsuite name="UdpServer">
+            <directory>unit/AppServer/Tests/Udp</directory>
+        </testsuite>
+        <testsuite name="ChannelServerUtilServer">
+            <directory>unit/ChannelServerUtilServer/Tests</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>
