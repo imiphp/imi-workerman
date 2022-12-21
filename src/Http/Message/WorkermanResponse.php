@@ -109,7 +109,14 @@ class WorkermanResponse extends Response
             $this->isBodyWritable = false;
             $response = $this->workermanResponse;
             $response->withBody((string) $this->getBody());
-            $this->connection->send($response);
+            
+            /** @var \Imi\Server\Http\Message\Contract\IHttpRequest $request */
+            $request = \Imi\RequestContext::get('request');
+            if(in_array('keep-alive', $request->getHeader('connection'))){
+                $this->connection->send($response);
+            }else{
+                $this->connection->close($response);
+            }
         }
 
         return $this;
